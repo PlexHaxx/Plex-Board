@@ -1,5 +1,6 @@
 class PlexServicesController < ApplicationController
-
+  include ApiHelper
+  include ApiExceptionHelper
 
   before_action :set_plex_service, only: [:show, :edit, :update, :destroy]
 

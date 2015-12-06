@@ -34,6 +34,10 @@ class ActiveSupport::TestCase
         with(:headers => {'Accept'=>'*/*; q=0.5, application/xml', 'Accept-Encoding'=>'gzip, deflate', 'User-Agent'=>'Ruby', 'X-Plex-Client-Identifier'=>'Plex-Board'}).
         to_return(:status => 201, :body => File.open(Rails.root.join 'test/fixtures/JSON/', "sign_in.json").read, :headers => AUTH_HEADERS)
 
+    WebMock.stub_request(:post, "https://user:badpass@my.plexapp.com/users/sign_in.json").
+        with(:headers => {'Accept'=>'*/*; q=0.5, application/xml', 'Accept-Encoding'=>'gzip, deflate', 'User-Agent'=>'Ruby', 'X-Plex-Client-Identifier'=>'Plex-Board'}).
+        to_return(:status => 401, :body => '{"error": "Invalid email, username, or password."}', :headers => AUTH_HEADERS)
+
     WebMock.stub_request(:get, "https://plex5:32400/status/sessions").
         with(:headers => {'Accept'=>'application/json', 'Accept-Encoding'=>'gzip, deflate', 'User-Agent'=>'Ruby', 'X-Plex-Token'=>TOKEN}).
         to_return(:status => 200, :body => File.open(Rails.root.join 'test/fixtures/JSON/', "plex_one_session.json").read, :headers => HEADERS)

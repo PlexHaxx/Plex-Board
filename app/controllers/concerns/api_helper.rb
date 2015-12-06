@@ -1,4 +1,5 @@
 module ApiHelper
+  extend ActiveSupport::Conncern
 
   def api_request(method:, url:, headers:, payload: nil, user: nil )
     raise TypeError unless method.is_a? Symbol
@@ -25,74 +26,57 @@ module ApiHelper
 
   def api_call(method, url, headers, payload)
     RestClient::Request.execute method: method, url: url,
-                                user: user.username, password: user.password,
-                                headers: headers, payload: payload  do |resp, request, result, &block|
-      case resp.code
-        when 200..202
-          logger.info("#{resp.code} from #{url}.")
-          parsed = (JSON.parse(resp))
-          if parsed.length > 0
-            logger.debug("The response body has a length of: #{parsed.length}")
-            user.update!(:cookie => resp.cookies.to_json)
-            return parsed
-          else
-            logger.warn("Got empty response from #{url}, clearing cookie just in case")
-            user.update!(:cookie => nil)
-            return parsed
-          end
-        when 401
-          logger.warn("Got 401 Unauthorized from #{url}.")
-          log_request_data(user: user, request: request, response: resp, log_level: Logger::ERROR)
-          raise APIException.new '401 Unauthorized', resp
-        when 400
-          logger.warn("Got 400 Bad Request back from #{url}")
-          log_request_data(user: user, request: request, response: resp, log_level: Logger::ERROR)
-          raise APIException.new '400 Bad Request', resp
-        when 404
-          logger.warn("Got 404 Not Found from #{url}")
-          log_request_data(user: user, request: request, response: resp, log_level: Logger::ERROR)
-          raise APIException.new '404 Bad Request', resp
-        when 500
-          logger.error("Got 500 Internal Server Error from #{url}")
-          log_request_data(user: user, request: request, response: resp, log_level: Logger::ERROR)
-          raise APIException.new '500 Internal Server Error', resp
-        else
-          log_request_data(user: user, request: request, response: resp, log_level: Logger::FATAL)
-          raise APIException.new "#{resp.code} was unexpected, cannot continue", resp
-      end
+                                headers: headers, payload: payload  do |resp, request|
+      handle_response(resp, request, url)
     end
   end
 
   def basic_auth(user, method, url, headers, payload)
     RestClient::Request.execute method: method, url: url,
                                 user: user.username, password: user.password,
-                                headers: headers, payload: payload  do |resp, request, result, &block|
-      case resp.code
-        when 200..202
-          logger.info("#{resp.code} from #{url}.")
-          return (JSON.parse(resp))
-        when 401
-          logger.warn("Got 401 Unauthorized from #{url}.")
-          log_request_data(user: user, request: request, response: resp, log_level: Logger::ERROR)
-          raise APIException.new '401 Unauthorized', resp
-        when 400
-          logger.warn("Got 400 Bad Request back from #{url}")
-          log_request_data(user: user, request: request, response: resp, log_level: Logger::ERROR)
-          raise APIException.new '400 Bad Request', resp
-        when 404
-          logger.warn("Got 404 Not Found from #{url}")
-          log_request_data(user: user, request: request, response: resp, log_level: Logger::ERROR)
-          raise APIException.new '404 Bad Request', resp
-        when 500
-          logger.error("Got 500 Internal Server Error from #{url}")
-          log_request_data(user: user, request: request, response: resp, log_level: Logger::ERROR)
-          raise APIException.new '500 Internal Server Error', resp
-        else
-          log_request_data(user: user, request: request, response: resp, log_level: Logger::FATAL)
-          raise APIException.new "#{resp.code} was unexpected, cannot continue", resp
-      end
+                                headers: headers, payload: payload  do |resp, request|
+      handle_response(resp, request, url)
     end
   end
+
+  def handle_response(resp, request, url)
+    case resp.code
+      when 200..202
+        logger.info("#{resp.code} from #{url}")
+        parsed = (JSON.parse(resp))
+        if parsed.length > 0
+          logger.debug("The response body has a length of: #{parsed.length}")
+          log_request_data(request: request, response: resp, log_level: Logger::DEBUG)
+          return parsed
+        else
+          logger.warn("Got empty response from #{url}")
+          log_request_data(request: request, response: resp)
+          return parsed
+        end
+      when 401
+        logger.warn("Got 401 Unauthorized from #{url}")
+        log_request_data(request: request, response: resp, log_level: Logger::ERROR)
+        raise ApiExceptionHelper.new '401 Unauthorized', resp
+      when 400
+        logger.warn("Got 400 Bad Request back from #{url}")
+        log_request_data(request: request, response: resp, log_level: Logger::ERROR)
+        raise ApiExceptionHelper.new '400 Bad Request', resp
+      when 404
+        logger.warn("Got 404 Not Found from #{url}")
+        log_request_data(request: request, response: resp, log_level: Logger::ERROR)
+        raise ApiExceptionHelper.new '404 Bad Request', resp
+      when 500
+        logger.error("Got 500 Internal Server Error from #{url}")
+        log_request_data(request: request, response: resp, log_level: Logger::FATAL)
+        raise ApiExceptionHelper.new '500 Internal Server Error', resp
+      else
+        log_request_data(request: request, response: resp, log_level: Logger::FATAL)
+        raise ApiExceptionHelper.new "Response code: #{resp.code} was unexpected, cannot continue.", resp
+    end
+  end
+
+
+
 
   # def cookie_auth(user, method, url, headers, payload, executed = false)
   #
@@ -109,7 +93,7 @@ module ApiHelper
   #
   #     case resp.code
   #       when 200..202
-  #         logger.info("#{resp.code} from #{url}.")
+  #         logger.info("#{resp.code} from #{url}")
   #         log_request_data(user: user, request: request, response: resp, log_level: Logger::INFO, clear_cookie: false)
   #         parsed = (JSON.parse(resp))
   #         if parsed.length > 0
@@ -142,7 +126,7 @@ module ApiHelper
   #         else
   #           logger.warn('API query-retry failed after waiting 500ms.')
   #         end
-  #         raise APIException.new '404 Bad Request', resp
+  #         raise ApiExceptionHelper.new '404 Bad Request', resp
   #       when 500
   #         logger.warn("Got 500 Internal Server Error from #{url}")
   #         log_request_data(user: user, request: request, response: resp)

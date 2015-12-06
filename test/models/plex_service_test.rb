@@ -4,10 +4,10 @@ class PlexServiceTest < ActiveSupport::TestCase
 
 
   test 'plex services should be valid' do
-    assert @plex_service_one.valid?
-    assert @plex_service_with_no_token.valid?
-    assert @plex_service_with_one_session.valid?
-    assert @plex_service_with_two_sessions.valid?
+    assert @plex_service_one.valid?, 'plex_service_one was invalid'
+    assert @plex_service_with_no_token.valid?, 'plex_service_with_no_token was invalid'
+    assert @plex_service_with_one_session.valid?, 'plex_service_with_one_session was invalid'
+    assert @plex_service_with_two_sessions.valid?, 'plex_service_with_two_sessions was invalid'
   end
 
   test 'Plex_service_with_one_session should have a session' do

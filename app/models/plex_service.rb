@@ -13,24 +13,24 @@ class PlexService < ActiveRecord::Base
 # http://stackoverflow.com/questions/17371334/how-is-attr-accessible-used-in-rails-4
   accepts_nested_attributes_for :service
 
-  strip_attributes :only => [:username], :collapse_spaces => true
+  # strip_attributes :only => [:username], :collapse_spaces => true
 
-  validates :username, length: { maximum: 255 }, allow_blank: true
-  validates :password, length: { maximum: 255 }, allow_blank: true
-  # validates_associated :service
-  # validates_presence_of :service
+  # validates :username, length: { maximum: 255 }, allow_blank: true
+  # validates :password, length: { maximum: 255 }, allow_blank: true
+  validates :token, length: {minimum: 16, maximum: 32}, allow_blank: false
+  validates_presence_of :service
 
 
   def plex_api(method = :get, path = '', headers = {})
     connection_string = 'https://' + self.service.connect_method + ':' + self.service.port.to_s
     logger.info("Making Plex API call to: #{connection_string}#{path}")
 
-    if !self.service.online_status
+    unless self.service.online_status
       logger.warn('Service: ' + self.service.name + ' is offline, cant grab plex data')
       return nil
     end
     if self.token.nil?
-      if !get_plex_token
+      unless get_plex_token
         return nil
       end
     end
@@ -39,16 +39,18 @@ class PlexService < ActiveRecord::Base
                  'X-Plex-Token' => self.token }
     headers.merge!(defaults)
 
+    url = connection_string + path
+
     begin
-      JSON.parse(RestClient::Request.execute method: method,
-                                             url: "#{connection_string}#{path}",
-                                             headers: headers, verify_ssl: OpenSSL::SSL::VERIFY_NONE,
-                                             timeout: 5, open_timeout: 5)
-    rescue => error
-      logger.error(error)
+      api_request(method: method, headers: headers, url: url)
+      # JSON.parse(RestClient::Request.execute method: method,
+      #                                        url: "#{connection_string}#{path}",
+      #                                        headers: headers, verify_ssl: OpenSSL::SSL::VERIFY_NONE,
+      #                                        timeout: 5, open_timeout: 5)
+    rescue ApiExceptionHelper
+      logger.error('Error returned from api, see logs for details.')
       return nil
     end
-
   end
 
   def get_plex_token
@@ -57,20 +59,18 @@ class PlexService < ActiveRecord::Base
     headers = {
         'X-Plex-Client-Identifier'=> 'Plex-Board'
     }
-    begin
-      response = RestClient::Request.execute method: :post, url: url,
-                                             user: self.username, password: self.password, headers: headers
-      self.update!(token: (JSON.parse response)['user']['authentication_token'])
-      return true #yes, I know that Ruby has implicit returns, but it helps readability
-    rescue => error
-      logger.error('There was an error getting the plex token')
-      logger.error(error)
+    user = PlexUser.new(username: self.username, password: self.password)
 
+    begin
+      response = api_request(method: :post, url: url, headers: headers, user: user)
+      # response = RestClient::Request.execute method: :post, url: url,
+      #                                        user: self.username, password: self.password, headers: headers
+      self.update!(token: (response)['user']['authentication_token'])
+      return true
+    rescue ApiExceptionHelper
+      logger.error('Error returned from api, see logs for details.')
       return false
     end
-
-    # logger.debug(response)
-    # logger.debug(self.token)
   end
 
 
@@ -178,3 +178,5 @@ class PlexService < ActiveRecord::Base
   end
 
 end
+
+
